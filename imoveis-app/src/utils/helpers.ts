@@ -1,5 +1,5 @@
 import { Property, DashboardStats, Transaction } from '../types';
-import { differenceInDays, format, parseISO, addDays } from 'date-fns';
+import { differenceInDays, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export const formatCurrency = (value: number): string => {
@@ -66,7 +66,7 @@ export const getStatusColor = (status: Property['status']): string => {
 
 export const calculateDashboardStats = (
   properties: Property[],
-  transactions: Transaction[]
+  _transactions: Transaction[]
 ): DashboardStats => {
   const totalProperties = properties.length;
   const occupiedProperties = properties.filter(p => p.status === 'occupied').length;

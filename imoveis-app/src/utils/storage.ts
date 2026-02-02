@@ -1,102 +1,120 @@
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc,
+  query,
+  where
+} from 'firebase/firestore';
+import { db } from '../firebase';
 import { Property, Transaction } from '../types';
 
-const PROPERTIES_KEY = 'imoveis_properties';
-const TRANSACTIONS_KEY = 'imoveis_transactions';
+const PROPERTIES_COLLECTION = 'properties';
+const TRANSACTIONS_COLLECTION = 'transactions';
 
 // Properties CRUD
-export const getProperties = (): Property[] => {
-  const data = localStorage.getItem(PROPERTIES_KEY);
-  return data ? JSON.parse(data) : [];
+export const getProperties = async (): Promise<Property[]> => {
+  const querySnapshot = await getDocs(collection(db, PROPERTIES_COLLECTION));
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as Property[];
 };
 
-export const saveProperties = (properties: Property[]): void => {
-  localStorage.setItem(PROPERTIES_KEY, JSON.stringify(properties));
-};
-
-export const addProperty = (property: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>): Property => {
-  const properties = getProperties();
-  const newProperty: Property = {
+export const addProperty = async (property: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>): Promise<Property> => {
+  const now = new Date().toISOString();
+  const docRef = await addDoc(collection(db, PROPERTIES_COLLECTION), {
     ...property,
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
+  });
+  return {
+    ...property,
+    id: docRef.id,
+    createdAt: now,
+    updatedAt: now,
   };
-  properties.push(newProperty);
-  saveProperties(properties);
-  return newProperty;
 };
 
-export const updateProperty = (id: string, data: Partial<Property>): Property | null => {
-  const properties = getProperties();
-  const index = properties.findIndex(p => p.id === id);
-  if (index === -1) return null;
-  
-  properties[index] = {
-    ...properties[index],
+export const updateProperty = async (id: string, data: Partial<Property>): Promise<Property | null> => {
+  const docRef = doc(db, PROPERTIES_COLLECTION, id);
+  const updatedData = {
     ...data,
     updatedAt: new Date().toISOString(),
   };
-  saveProperties(properties);
-  return properties[index];
+  await updateDoc(docRef, updatedData);
+  return { id, ...updatedData } as Property;
 };
 
-export const deleteProperty = (id: string): boolean => {
-  const properties = getProperties();
-  const filtered = properties.filter(p => p.id !== id);
-  if (filtered.length === properties.length) return false;
-  saveProperties(filtered);
-  
-  // Also delete related transactions
-  const transactions = getTransactions();
-  const filteredTx = transactions.filter(t => t.propertyId !== id);
-  saveTransactions(filteredTx);
-  
-  return true;
+export const deleteProperty = async (id: string): Promise<boolean> => {
+  try {
+    // Delete the property
+    await deleteDoc(doc(db, PROPERTIES_COLLECTION, id));
+    
+    // Delete related transactions
+    const q = query(collection(db, TRANSACTIONS_COLLECTION), where('propertyId', '==', id));
+    const querySnapshot = await getDocs(q);
+    const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting property:', error);
+    return false;
+  }
 };
 
-export const getPropertyById = (id: string): Property | undefined => {
-  const properties = getProperties();
+export const getPropertyById = async (id: string): Promise<Property | undefined> => {
+  const properties = await getProperties();
   return properties.find(p => p.id === id);
 };
 
 // Transactions CRUD
-export const getTransactions = (): Transaction[] => {
-  const data = localStorage.getItem(TRANSACTIONS_KEY);
-  return data ? JSON.parse(data) : [];
+export const getTransactions = async (): Promise<Transaction[]> => {
+  const querySnapshot = await getDocs(collection(db, TRANSACTIONS_COLLECTION));
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as Transaction[];
 };
 
-export const saveTransactions = (transactions: Transaction[]): void => {
-  localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
-};
-
-export const addTransaction = (transaction: Omit<Transaction, 'id' | 'createdAt'>): Transaction => {
-  const transactions = getTransactions();
-  const newTransaction: Transaction = {
+export const addTransaction = async (transaction: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction> => {
+  const now = new Date().toISOString();
+  const docRef = await addDoc(collection(db, TRANSACTIONS_COLLECTION), {
     ...transaction,
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+  });
+  return {
+    ...transaction,
+    id: docRef.id,
+    createdAt: now,
   };
-  transactions.push(newTransaction);
-  saveTransactions(transactions);
-  return newTransaction;
 };
 
-export const deleteTransaction = (id: string): boolean => {
-  const transactions = getTransactions();
-  const filtered = transactions.filter(t => t.id !== id);
-  if (filtered.length === transactions.length) return false;
-  saveTransactions(filtered);
-  return true;
+export const deleteTransaction = async (id: string): Promise<boolean> => {
+  try {
+    await deleteDoc(doc(db, TRANSACTIONS_COLLECTION, id));
+    return true;
+  } catch (error) {
+    console.error('Error deleting transaction:', error);
+    return false;
+  }
 };
 
-export const getTransactionsByProperty = (propertyId: string): Transaction[] => {
-  const transactions = getTransactions();
-  return transactions.filter(t => t.propertyId === propertyId);
+export const getTransactionsByProperty = async (propertyId: string): Promise<Transaction[]> => {
+  const q = query(collection(db, TRANSACTIONS_COLLECTION), where('propertyId', '==', propertyId));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as Transaction[];
 };
 
-// Initialize with sample data from Excel
-export const initializeWithSampleData = (): void => {
-  const properties = getProperties();
+// Initialize with sample data (only if database is empty)
+export const initializeWithSampleData = async (): Promise<void> => {
+  const properties = await getProperties();
   if (properties.length > 0) return; // Already initialized
 
   // Excel serial date to JS date conversion
@@ -211,5 +229,7 @@ export const initializeWithSampleData = (): void => {
     },
   ];
 
-  sampleProperties.forEach(p => addProperty(p));
+  for (const p of sampleProperties) {
+    await addProperty(p);
+  }
 };

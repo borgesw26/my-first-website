@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Property, Transaction } from './types';
-import { getProperties, getTransactions, addProperty, updateProperty, deleteProperty, addTransaction, deleteTransaction } from './utils/storage';
+import { getProperties, getTransactions, addProperty, updateProperty, deleteProperty, addTransaction, deleteTransaction, initializeWithSampleData } from './utils/storage';
 import { calculateDashboardStats } from './utils/helpers';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -19,10 +19,25 @@ function App() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(() => {
-    setProperties(getProperties());
-    setTransactions(getTransactions());
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Initialize sample data if database is empty
+      await initializeWithSampleData();
+      
+      const [propertiesData, transactionsData] = await Promise.all([
+        getProperties(),
+        getTransactions()
+      ]);
+      setProperties(propertiesData);
+      setTransactions(transactionsData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -31,25 +46,25 @@ function App() {
 
   const stats = calculateDashboardStats(properties, transactions);
 
-  const handleAddProperty = (data: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>) => {
-    addProperty(data);
-    loadData();
+  const handleAddProperty = async (data: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>) => {
+    await addProperty(data);
+    await loadData();
     setView('properties');
   };
 
-  const handleUpdateProperty = (data: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleUpdateProperty = async (data: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (selectedProperty) {
-      updateProperty(selectedProperty.id, data);
-      loadData();
+      await updateProperty(selectedProperty.id, data);
+      await loadData();
       setView('properties');
       setSelectedProperty(null);
     }
   };
 
-  const handleDeleteProperty = (id: string) => {
+  const handleDeleteProperty = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este imóvel? Todas as transações relacionadas também serão excluídas.')) {
-      deleteProperty(id);
-      loadData();
+      await deleteProperty(id);
+      await loadData();
       if (selectedProperty?.id === id) {
         setSelectedProperty(null);
         setView('properties');
@@ -67,18 +82,29 @@ function App() {
     setView('edit-property');
   };
 
-  const handleAddTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
-    addTransaction(data);
-    loadData();
+  const handleAddTransaction = async (data: Omit<Transaction, 'id' | 'createdAt'>) => {
+    await addTransaction(data);
+    await loadData();
     setShowTransactionForm(false);
   };
 
-  const handleDeleteTransaction = (id: string) => {
+  const handleDeleteTransaction = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta transação?')) {
-      deleteTransaction(id);
-      loadData();
+      await deleteTransaction(id);
+      await loadData();
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
 
   const renderView = () => {
     switch (view) {

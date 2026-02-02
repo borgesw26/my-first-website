@@ -11,8 +11,6 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ stats, properties, onViewProperty, onShowAlerts }: DashboardProps) {
-  const occupiedProperties = properties.filter(p => p.status === 'occupied');
-
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Stats Cards */}
@@ -175,13 +173,6 @@ interface StatCardProps {
 }
 
 function StatCard({ icon, label, value, subtext, color }: StatCardProps) {
-  const colorClasses = {
-    blue: 'from-blue-500 to-blue-600',
-    green: 'from-green-500 to-green-600',
-    emerald: 'from-emerald-500 to-emerald-600',
-    violet: 'from-violet-500 to-violet-600',
-  };
-
   const iconBgClasses = {
     blue: 'bg-blue-100 text-blue-600',
     green: 'bg-green-100 text-green-600',
